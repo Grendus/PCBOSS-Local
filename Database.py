@@ -1,67 +1,62 @@
-from google.appengine.ext import ndb
+import sqlite3
+from datetime import datetime
 
-class user(ndb.Model):
-    email_address = ndb.StringProperty()
-    password = ndb.StringProperty(indexed=False)
-    first_name = ndb.StringProperty()
-    last_name = ndb.StringProperty()
+dbname = "localdb.db"
 
-    def query_user(self, username, password):
-        users = self.query(user.email_address==username)
-        if users.count()>0 and users.fetch()[0].password==password:
-            return True
-        return False
-    
-class CADFile(ndb.Model):
-    submitter_name = ndb.StringProperty()
-    filename = ndb.StringProperty()
-    time = ndb.DateTimeProperty(auto_now_add=True)
-    description = ndb.TextProperty()
-    CADFile = ndb.BlobProperty()
-    status = ndb.StringProperty()
-
-    def export(self):
-        data = {"submitter_name":self.submitter_name,
-                "filename":self.filename,
-                "key":str(self.key.id()),
-                "time":self.time.strftime("%Y %m %d %H:%M:%S"),
-                "description":self.description,
-                "CADFile":self.CADFile,
-                "status":self.status}
-        return data
-    
 #checks the validity of every username/password combo
 def isValid(uname, pwd):
-    return user().query_user(uname,pwd)
+    conn = sqlite3.connect(dbname) 
+    c = conn.cursor()
+    c.execute("SELECT * FROM user WHERE email_address=? and password=?", (uname, pwd));
+    userExists = c.fetchone() != None
+    conn.close()
+    return userExists
 
 #returns a list of dictionaries. Each one should have a filename, upload time, description, and status
 def getJobs(uname):
     filelist = []
-    users_files = CADFile.gql("WHERE submitter_name = :1", uname)
-    for stored_file in users_files:
+    conn = sqlite3.connect(dbname)
+    c = conn.cursor()
+    c.execute("SELECT time, filename, description, status FROM CADFile WHERE submitter_name = ?", (uname,))
+    for stored_file in c.fetchmany():
         filepoint={}
         filepoint['time'] = stored_file.time
         filepoint['name'] = stored_file.filename
         filepoint['description'] = stored_file.description
         filepoint['status'] = stored_file.status
         filelist.append(filepoint)
+    conn.close()
     return filelist
 
 def getUserInfo(uname):
-    userData = user.gql("WHERE email_address = :1", uname).get()
-    userDict = {"email":userData.email_address,
-                "fname":userData.first_name,
-                "lname":userData.last_name}
+    conn = sqlite3.connect(dbname)
+    c = conn.cursor()
+    c.execute("select email_address, first_name, last_name from user WHERE email_address = ?", (uname,))
+    try:
+        userData = c.fetchone()
+        userDict = {"email":userData[0],
+                    "fname":userData[1],
+                    "lname":userData[2]}
+    except AttributeError:
+        userDict = {"email":"invalid", "fname":'invalid', 'lname':'invalid'}
+
+    conn.close()
     return userDict
 
 #stores a file in the datastore
 def storeFile(ID, encFile, filedesc):
-    uploadedFile = CADFile(submitter_name=ID,
-                           filename=encFile[0]['filename'],
-                           description=filedesc,
-                           status="Pending")
-    uploadedFile.CADFile = encFile[0]['body']
-    uploadedFile.put()
+    conn = sqlite3.connect(dbname)
+    c = conn.cursor()
+    uploadedFile = {"submitter_name":ID,
+                    "filename":encFile[0]['filename'],
+                    "time":datetime.now(),
+                    "description":filedesc,
+                    "status":"Pending",
+                    "CADFile":encFile[0]['body']}
+    
+    c.execute("insert into CADFile values (:submitter_name,:filename,:CADFile,:time,:status,:description)", uploadedFile)
+    c.commit()
+    conn.close()
 
 #adds a user to the system; should only be done by the home system
 def addUser(email, encpwd, fname, lname):
