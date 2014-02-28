@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime
 
-dbname = "localdb.db"
+dbname = "localdb.sqlite"
 
 #checks the validity of every username/password combo
 def isValid(uname, pwd):
@@ -49,12 +49,12 @@ def storeFile(ID, encFile, filedesc):
     c = conn.cursor()
     uploadedFile = {"submitter_name":ID,
                     "filename":encFile[0]['filename'],
-                    "time":datetime.now(),
+                    "time":datetime.datetime.now(),
                     "description":filedesc,
-                    "status":"Pending",
-                    "CADFile":encFile[0]['body']}
+                    "CADFile":"",
+                    "status":"Pending"}
     
-    c.execute("insert into CADFile values (:submitter_name,:filename,:CADFile,:time,:status,:description)", uploadedFile)
+    c.execute("insert into CADFile values (:submitter_name,:filename,:time,:description,:CADFile,:status)", uploadedFile)
     c.commit()
     conn.close()
 

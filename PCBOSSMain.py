@@ -1,5 +1,5 @@
-import wsgiref.handlers
-import tornado.wsgi
+import tornado.ioloop
+import tornado.httpserver
 import tornado.web
 import os
 import Handlers
@@ -20,10 +20,12 @@ def application():
                 static_path=os.path.join(os.path.dirname(__file__), "static"),
                 debug=True)
     
-    return tornado.wsgi.WSGIApplication(handlers, "", **settings)
+    return tornado.web.Application(handlers, "", **settings)
 
 def main():
-    server = wsgiref.handlers.CGIHandler().run(application())
+    http_server = tornado.httpserver.HTTPServer(application())
+    http_server.listen(8000)
+    tornado.ioloop.IOLoop.instance().start()
 
 if __name__ == "__main__":
     main()
