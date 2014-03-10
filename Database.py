@@ -1,7 +1,8 @@
 import sqlite3
-from datetime import datetime
+import datetime, time
 
 dbname = "localdb.sqlite"
+sqlite3.register_adapter(datetime.datetime, lambda x: time.mktime(x.timetuple()))
 
 #checks the validity of every username/password combo
 def isValid(uname, pwd):
@@ -9,6 +10,7 @@ def isValid(uname, pwd):
     c = conn.cursor()
     c.execute("SELECT * FROM user WHERE email_address=? and password=?", (uname, pwd));
     userExists = c.fetchone() != None
+    conn.commit()
     conn.close()
     return userExists
 
@@ -20,11 +22,13 @@ def getJobs(uname):
     c.execute("SELECT time, filename, description, status FROM CADFile WHERE submitter_name = ?", (uname,))
     for stored_file in c.fetchmany():
         filepoint={}
-        filepoint['time'] = stored_file.time
-        filepoint['name'] = stored_file.filename
-        filepoint['description'] = stored_file.description
-        filepoint['status'] = stored_file.status
+        #splittime = stored_file[0].split("-")
+        filepoint['time'] = datetime.datetime.fromtimestamp(stored_file[0])
+        filepoint['name'] = stored_file[1]
+        filepoint['description'] = stored_file[2]
+        filepoint['status'] = stored_file[3]
         filelist.append(filepoint)
+    conn.commit()
     conn.close()
     return filelist
 
@@ -39,7 +43,7 @@ def getUserInfo(uname):
                     "lname":userData[2]}
     except AttributeError:
         userDict = {"email":"invalid", "fname":'invalid', 'lname':'invalid'}
-
+    conn.commit()
     conn.close()
     return userDict
 
@@ -51,40 +55,53 @@ def storeFile(ID, encFile, filedesc):
                     "filename":encFile[0]['filename'],
                     "time":datetime.datetime.now(),
                     "description":filedesc,
-                    "CADFile":"",
+                    "CADFile":encFile[0]['body'],
                     "status":"Pending"}
     
     c.execute("insert into CADFile values (:submitter_name,:filename,:time,:description,:CADFile,:status)", uploadedFile)
-    c.commit()
+    conn.commit()
     conn.close()
 
 #adds a user to the system; should only be done by the home system
 def addUser(email, encpwd, fname, lname):
     try:
-        newUser = user(email_address=email,
-                       password=encpwd,
-                       first_name=fname,
-                       last_name=lname)
-        newUser.put()
-    except:
+        conn = sqlite3.connect(dbname)
+        c = conn.cursor()
+        c.execute("INSERT INTO user VALUES(?,?,?,?)",(email,encpwd,fname,lname))
+    except Exception as e:
+        print e
         return False
+    finally:
+        conn.commit()
+        conn.close()
     return True
 
 def updateAccount(email, fname, lname, pword=False):
-    selectedUser = user.gql("WHERE email_address = :1", email).get()
+    conn = sqlite3.connect(dbname)
+    c = conn.cursor()
     if pword:
-        selectedUser.password = pword
-    selectedUser.first_name = fname
-    selectedUser.last_name = lname
-    selectedUser.put()
+        c.execute("UPDATE user SET password=?, first_name=?, last_name=? WHERE email_address=?",(pword,fname,lname,email))
+    else:
+        c.execute("UPDATE user SET first_name=?, last_name=? WHERE email_address=?",(fname,lname,email))
+    conn.commit()
+    conn.close()
 
 def listJobs():
-    jobs = CADFile.gql('')
+    conn = sqlite3.connect(dbname)
+    c = conn.cursor()
+    c.execute("SELECT submitter_name, filename, rowid, time, description, status from CADFile")
+    jobs = c.fetchmany()
     joblist = []
     for job in jobs:
-        jobdict = job.export()
-        del jobdict["CADFile"]
+        jobdict = {"submitter_name":job[0],
+                   "filename":job[1],
+                   "key":job[2],
+                   "time":datetime.datetime.fromtimestamp(job[3]),
+                   "description":job[4],
+                   "status":job[5]}
         joblist.append(jobdict)
+    conn.commit()
+    conn.close()
     return joblist
 
 def getJob(filenum):
