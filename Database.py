@@ -106,24 +106,51 @@ def listJobs():
 
 def getJob(filenum):
     #todo: fix the GQL injection vulnerability here. Probably safe, it's behind an authorization wall, but still bad form to leave it there
-    job = CADFile.gql("WHERE __key__ = KEY('CADFile', "+str(filenum)+")").get()
-    return job.export()
+    conn = sqlite3.connect(dbname)
+    c = conn.cursor()
+    c.execute("select submitter_name, filename, description, CADFile, status from CADFile where rowid = ?",(filenum,))
+    job = c.fetchone()
+    filedata = {"submitter_name":job[0],
+                "filename":job[1],
+                "description":job[2],
+                "CADFile":job[3],
+                "status":job[4]}
+    return filedata
 
 def updateStatus(filenum, status):
-    job = getJob(filenum)
-    job.status = status
-    job.put()
+    conn = sqlite3.connect(dbname)
+    c = conn.cursor()
+    c.execute("UPDATE CADFile SET status=? WHERE rowid = ?",(status, filenum))
+    conn.commit()
+    conn.close()
 
 def mostRecentFile():
-    job = CADFile.gql("ORDER BY time DESC LIMIT 1").get()
-    return job.export()
+    conn = sqlite3.connect(dbname)
+    c = conn.cursor()
+    c.execute("select submitter_name, filename, description, CADFile, status, time from CADFile ORDER BY time DESC")
+    job = c.fetchone()
+    filedata = {"submitter_name":job[0],
+                "filename":job[1],
+                "description":job[2],
+                "CADFile":job[3],
+                "status":job[4]}
+    conn.close()
+    return filedata
 
 def mostRecentTimestamp():
-    return mostRecentFile().time
+    conn = sqlite3.connect(dbname)
+    c = conn.cursor()
+    c.execute("select submitter_name, filename, description, CADFile, status, time from CADFile ORDER BY time DESC")
+    job = c.fetchone()
+    conn.close()
+    return datetime.datetime.fromtimestamp(job[0])
 
 def listUsers():
-    users = user.gql("")
+    conn = sqlite3.connect(dbname)
+    c = conn.cursor()
+    c.execute("select email_address, first_name, last_name from user")
+    job = c.fetchmany()
     userlist = []
-    for userinfo in users:
-        userlist.append(userinfo.email_address)
+    for userinfo in job:
+        userlist.append((userinfo[0],userinfo[1],userinfo[2]))
     return userlist
