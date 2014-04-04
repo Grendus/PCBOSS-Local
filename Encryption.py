@@ -3,8 +3,8 @@ import keys
 import Crypto.PublicKey.RSA
 import base64
 
-encryption_key = Crypto.PublicKey.RSA.importKey(keys.private_key)
-decryption_key = Crypto.PublicKey.RSA.importKey(keys.public_key)
+encryption_key = Crypto.PublicKey.RSA.importKey(keys.public_key)
+decryption_key = Crypto.PublicKey.RSA.importKey(keys.private_key)
 
 def pwdHash(pwd):
     #todo: add hash function
